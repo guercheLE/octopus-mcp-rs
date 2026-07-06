@@ -1,7 +1,12 @@
 name: Release
 
-# Release attaches the built binary to GitHub Releases, publishes the crate to
-# crates.io, and pushes a versioned GHCR image.
+# Unlike targets::typescript's release.yml (semantic-release publishing to
+# npm), this project sets `publish = false` in Cargo.toml — it's an
+# application, not a library for reuse — so "release" means attaching a
+# built binary to a GitHub Release on a version tag, mirroring how mcpify's
+# own release.yml is triggered but skipping the crates.io-publish step that
+# doesn't apply to an unpublished application binary. Re-run mcpify with
+# --publish-registry if you want this project published to crates.io too.
 on:
   push:
     tags:

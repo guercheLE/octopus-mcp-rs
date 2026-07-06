@@ -22,20 +22,62 @@ use serde::Serialize;
 static REGISTER_VEC_EXTENSION: Once = Once::new();
 
 // mcpify:versions:begin
-const VERSION_STORE_FILES: &[(&str, &str)] = &[("2023.4.82.90", "mcp_store.db")];
+pub const VERSION_STORE_FILES: &[(&str, &str)] = &[("2023.4.82.90", "mcp_store.db")];
+
+// Every `.db` this crate supports, embedded into the compiled binary
+// itself via `include_bytes!` — mirrors how `validator.rs` already
+// embeds each version's schema, so this crate never needs its `.db`
+// files to exist anywhere on disk after `cargo install`.
+const VERSION_STORE_BYTES: &[(&str, &[u8])] =
+    &[("2023.4.82.90", include_bytes!("../../mcp_store.db"))];
 // mcpify:versions:end
 
 /// Resolves the active `api_version` (from the config cascade) to its
-/// store file — the default version's data always lives in the
-/// project-root `mcp_store.db` this target has always used; every other
-/// version lives in its own `mcp_store_v<label>.db` sibling, added by a
-/// later `mcpify add-version` call.
+/// store file. Every `.db` this crate supports is embedded into the
+/// compiled binary via `include_bytes!` (`VERSION_STORE_BYTES`) exactly
+/// like `validator.rs` embeds each version's schema — there is no
+/// filesystem fallback chain to reason about, and this crate never
+/// depends on any particular `.db` file existing anywhere on disk after
+/// `cargo install`. The one difference from a schema lookup: SQLite
+/// needs a real file to open a `Connection` against (unlike a `&[u8]`
+/// JSON schema, read directly from memory), so this extracts the
+/// embedded bytes to a fixed path in the OS temp dir on every call —
+/// cheap, since it only runs once per process start, and it means a
+/// rebuilt binary with different embedded bytes (a `populate_embeddings`
+/// re-run, an `add-version` update) can never be shadowed by a stale
+/// leftover from a previous install at that same path.
 pub fn resolve_store_path(api_version: &str) -> Result<PathBuf> {
-    VERSION_STORE_FILES
+    let file = VERSION_STORE_FILES
         .iter()
         .find(|(label, _)| *label == api_version)
-        .map(|(_, file)| PathBuf::from(file))
-        .with_context(|| format!("unknown api_version '{api_version}' — run the 'versions' command to see what's available"))
+        .map(|(_, file)| *file)
+        .with_context(|| format!("unknown api_version '{api_version}' — run the 'versions' command to see what's available"))?;
+    let bytes = VERSION_STORE_BYTES
+        .iter()
+        .find(|(label, _)| *label == api_version)
+        .map(|(_, bytes)| *bytes)
+        .with_context(|| format!("no embedded store data for api_version '{api_version}'"))?;
+
+    let mut dir = std::env::temp_dir();
+    dir.push(concat!(env!("CARGO_PKG_NAME"), "-store"));
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("failed to create temp dir '{}'", dir.display()))?;
+
+    let path = dir.join(file);
+    // Always (re)writes rather than skipping when the path already
+    // exists: the extraction path doesn't vary by build, so a stale copy
+    // from a previous install (older embedded bytes, e.g. before a
+    // `populate_embeddings` re-run or an `add-version` update) would
+    // otherwise linger forever, silently serving outdated data. The
+    // write is cheap — this runs once per process start, not per query.
+    std::fs::write(&path, bytes).with_context(|| {
+        format!(
+            "failed to extract embedded store data to '{}'",
+            path.display()
+        )
+    })?;
+
+    Ok(path)
 }
 
 const ENDPOINT_COLUMNS: &str = "operation_id, path, method, summary, description, input_schema, output_schema, auth_scheme_ref";
@@ -217,6 +259,24 @@ pub fn search_endpoints(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Guards against `VERSION_STORE_FILES` and `VERSION_STORE_BYTES`
+    /// silently drifting apart — every `api_version` this crate lists must
+    /// resolve to embedded bytes, or `resolve_store_path` fails at runtime
+    /// for exactly that version and nothing else, which is easy to miss in
+    /// review since the two arrays are edited in different places.
+    #[test]
+    fn every_version_store_file_has_embedded_bytes() {
+        let file_labels: std::collections::HashSet<_> = VERSION_STORE_FILES
+            .iter()
+            .map(|(label, _)| *label)
+            .collect();
+        let byte_labels: std::collections::HashSet<_> = VERSION_STORE_BYTES
+            .iter()
+            .map(|(label, _)| *label)
+            .collect();
+        assert_eq!(file_labels, byte_labels);
+    }
 
     /// Builds a read-write connection with the same schema mcpify's shared
     /// pipeline writes, and seeds it with one row — real usage never
