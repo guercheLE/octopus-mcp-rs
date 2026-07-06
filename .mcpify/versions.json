@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "language": "rust",
+  "display_name": "Octopus Server API",
+  "project_name": "octopus-mcp",
+  "default_version": "2023.4.82.90",
+  "versions": {
+    "2023.4.82.90": {
+      "db_file": "mcp_store.db",
+      "schemas_file": "src/validation/generated_schemas.json.zst",
+      "source": "/Users/lucianoguerche/Documents/GitHub/octopus-mcp/docs/octopus-openapi-v2023.4.8290-3.1.json",
+      "added_at": 1783356797
+    }
+  }
+}

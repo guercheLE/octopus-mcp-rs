@@ -1,0 +1,23 @@
+services:
+  octopus-mcp:
+    build: .
+    image: octopus-mcp:latest
+    env_file:
+      - .env
+    volumes:
+      - ~/.octopus-mcp:/root/.octopus-mcp
+    stdin_open: true
+    tty: true
+
+  octopus-mcp-http:
+    build: .
+    image: octopus-mcp:latest
+    env_file:
+      - .env
+    environment:
+      OCTOPUS_MCP_TRANSPORT: http
+      OCTOPUS_MCP_PORT: "3000"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ~/.octopus-mcp:/root/.octopus-mcp
