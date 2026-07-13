@@ -28,10 +28,19 @@ subcommand directly via `cargo run --`).
 ### Terminal Client (default)
 
 ```bash
+# 1. Semantic search over all 1,472 operations in the default Octopus store
 octopus-mcp search "create a release"
+
+# 2. Inspect the exact method, path, and input/output schemas before calling
 octopus-mcp get createReleaseBySpace
-octopus-mcp call createReleaseBySpace --args '{"spaceId": "Spaces-1", "ProjectId": "Projects-1"}'
+# method: POST
+# path: /{spaceId}/releases
+
+# 3. Path parameters are top-level fields; the request payload is nested under body
+octopus-mcp call createReleaseBySpace --args '{"spaceId":"Spaces-1","body":{"ProjectId":"Projects-1","SpaceId":"Spaces-1","Version":"1.2.3"}}'
 ```
+
+`call` accepts one JSON object through `--args` (or `-a`), not arbitrary per-operation CLI flags. Use `get <operationId>` to see the accepted field names and which ones are required.
 
 Other terminal subcommands:
 
