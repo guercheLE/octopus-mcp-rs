@@ -86,12 +86,19 @@ binary loads automatically.
 ## Docker
 
 ```bash
-docker compose up octopus-mcp        # stdio transport
-docker compose up octopus-mcp-http   # HTTP transport on :3000
+# Stdio: the MCP client launches this process and owns its stdin/stdout pipes
+docker compose run --rm -T octopus-mcp start
+
+# HTTP: a network endpoint published on http://localhost:3000
+docker compose run --rm --service-ports octopus-mcp-http http
 ```
+
+Run these commands from the repository root. Docker Compose automatically discovers `docker-compose.yml`; `octopus-mcp` and `octopus-mcp-http` are service names inside that file, not filenames. Writing `docker compose -f docker-compose.yml ...` is equivalent, but `-f` is only needed when the file has another name or location, or when combining multiple Compose files.
 
 Both services read configuration from a local `.env` file (copy
 `.env.example`) and persist config under `~/.octopus-mcp`.
+
+Stdio is a process transport, not a listening service: the MCP client must start the server and exchange JSON-RPC over that child process's stdin/stdout. This is useful when a host-side MCP client launches the container on demand, in CI or other one-client automation, or in a custom image where your application launches `octopus-mcp start` as a child process. Merely putting the application and server in the same image—or starting the stdio container separately with `docker compose up`—does not connect them; the parent application must create and own the pipes. One stdio server process normally serves one client. Use HTTP when the client and server are independently managed processes or containers, when other containers need to connect, or when multiple clients need a long-running shared endpoint.
 
 ## Observability & Resilience
 
