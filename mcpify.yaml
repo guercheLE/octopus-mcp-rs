@@ -1,0 +1,19 @@
+language: rust
+output: .
+force: true
+publish_registry: true
+publication:
+  license: MIT
+  repository: https://github.com/guercheLE/octopus-mcp-rs
+  readme: README.md
+  authors: ["Luciano Evaristo Guerche (Gorše)"]
+  keywords: [mcp, octopus, cli, api]
+  categories: [command-line-utilities, api-bindings]
+  exclude: [/.github, /.mcpify, /docs, /scripts, /openapi, /Dockerfile, /docker-compose.yml, /.dockerignore, /.env.example, /mcpify.yaml]
+versions:
+  - version: 2023.4.82.90
+    source: docs/octopus-openapi-v2023.4.8290-3.1.json
+    default: true
+version_policy:
+  mode: all
+package_size_limit_mb: 100
