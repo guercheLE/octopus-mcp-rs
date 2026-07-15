@@ -2773,7 +2773,7 @@ dependencies = [
 
 [[package]]
 name = "octopus-mcp"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
