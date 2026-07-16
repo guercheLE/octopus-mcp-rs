@@ -70,18 +70,24 @@ Environment variables all use the `OCTOPUS_MCP_` prefix and map onto the
 `OCTOPUS_MCP_AUTH_METHOD` (currently only `apiKey` is supported),
 `OCTOPUS_MCP_LOG_LEVEL`, `OCTOPUS_MCP_TRANSPORT`, `OCTOPUS_MCP_HOST`,
 `OCTOPUS_MCP_PORT`, `OCTOPUS_MCP_RATE_LIMIT`, `OCTOPUS_MCP_TIMEOUT_MS`,
-`OCTOPUS_MCP_RETRY_ATTEMPTS`, and `OCTOPUS_MCP_CORS_ALLOW`. Note that
-`.env.example` also lists `OCTOPUS_MCP_API_KEY`, but nothing in the
-codebase currently reads that variable — the API key is never taken from
-env or a config file; see [Credential storage](#credential-storage) below.
+`OCTOPUS_MCP_RETRY_ATTEMPTS`, and `OCTOPUS_MCP_CORS_ALLOW`. `.env.example`
+also lists `OCTOPUS_MCP_API_KEY`/`OCTOPUS_MCP_TOKEN` — either one, if set,
+is read as a credential override (checked before the keychain/encrypted-file
+store); see [Credential storage](#credential-storage) below.
+
+> **Base URL:** some APIs define their OpenAPI `servers[].url` with a path
+> prefix. For `OCTOPUS_MCP_URL`, that prefix is `/api` — set it to something
+> like `https://octopus.example.com/api`, not just `https://octopus.example.com`,
+> or requests will 404.
 
 `octopus-mcp setup` interactively collects the URL/auth method/etc. and can
 write the non-secret values to a `.env` file (source it into your shell, or
-use it as-is with `docker compose`, before running the binary directly) or
-print a ready-to-run CLI invocation. It can also write a `config.json`,
-though note the cascade above reads YAML config files, not that file, so
-hand-author one of the `.yml` paths above if you want a persisted file the
-binary loads automatically.
+use it as-is with `docker compose`, before running the binary directly), a
+global config file (`~/.octopus-mcp/config.yml`) or local config file
+(`./octopus-mcp.config.yml`, both read automatically by the cascade above),
+a `config.json` (note: the cascade reads YAML config files, not this one —
+prefer the global/local YAML options if you want a persisted file the
+binary loads automatically), or print a ready-to-run CLI invocation.
 
 ## Docker
 

@@ -2,6 +2,9 @@
 
 use async_trait::async_trait;
 
+use crate::core::config_schema::AuthMethod;
+
+use super::super::auth_manager::header_location_for;
 use super::super::auth_strategy::{AuthConfig, AuthStrategy, Credentials};
 use super::super::errors::AuthError;
 
@@ -17,6 +20,16 @@ impl AuthStrategy for ApiKeyStrategy {
 
         let mut credentials = Credentials::new();
         credentials.insert("api_key".to_string(), api_key.clone());
+        // Carries the scheme's real declared header name through to
+        // `AuthManager::apply_auth_headers`'s stdio path, so it stops
+        // hardcoding a generic `X-Api-Key` and instead emits whatever this
+        // deployment's auth scheme actually expects (e.g. Octopus's
+        // `X-Octopus-ApiKey`) — see `header_location_for`.
+        let (_, header_name) = header_location_for(AuthMethod::ApiKey);
+        credentials.insert(
+            "request_header_name".to_string(),
+            header_name.to_string(),
+        );
         Ok(credentials)
     }
 

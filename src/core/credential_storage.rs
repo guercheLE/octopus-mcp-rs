@@ -11,11 +11,19 @@ use sha2::{Digest, Sha256};
 
 const SERVICE_NAME: &str = "octopus-mcp";
 
-fn config_dir() -> PathBuf {
-    let home = std::env::var_os("HOME")
+/// Resolves the current user's home directory: tries `HOME` first (set on
+/// macOS/Linux and in most containers), then `USERPROFILE` (Windows' native
+/// equivalent, since `HOME` is not guaranteed to be set there), then falls
+/// back to `.` (cwd) if neither is set.
+fn resolve_home_dir() -> PathBuf {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
-    home.join(".octopus-mcp")
+        .unwrap_or_else(|| PathBuf::from("."))
+}
+
+fn config_dir() -> PathBuf {
+    resolve_home_dir().join(".octopus-mcp")
 }
 
 fn fallback_file() -> PathBuf {
@@ -29,9 +37,9 @@ fn fallback_file() -> PathBuf {
 /// equally-simple choice available in this crate's toolchain that also
 /// detects tampering, which CBC alone does not.
 fn encryption_key() -> [u8; 32] {
-    let home = std::env::var("HOME").unwrap_or_default();
+    let home = resolve_home_dir();
     let mut hasher = Sha256::new();
-    hasher.update(home.as_bytes());
+    hasher.update(home.to_string_lossy().as_bytes());
     hasher.update(SERVICE_NAME.as_bytes());
     hasher.finalize().into()
 }
@@ -138,8 +146,13 @@ pub fn save_credential(account: &str, value: &str) -> anyhow::Result<()> {
 pub fn load_credential(account: &str) -> anyhow::Result<Option<String>> {
     match Entry::new(SERVICE_NAME, account).and_then(|entry| entry.get_password()) {
         Ok(password) => Ok(Some(password)),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(_) => load_from_file(account),
+        // A clean "no entry" from the keychain doesn't necessarily mean no
+        // credential exists — it may have only ever been written to the
+        // encrypted-file fallback (e.g. because the keychain backend was
+        // unavailable at save time and has since become available again,
+        // with no matching entry of its own). Consult the file before
+        // giving up, same as for any other keychain error.
+        Err(keyring::Error::NoEntry) | Err(_) => load_from_file(account),
     }
 }
 
