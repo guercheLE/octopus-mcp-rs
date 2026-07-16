@@ -104,9 +104,12 @@ fn populate_one(path: &Path) -> anyhow::Result<usize> {
     // that returned an empty/zero vector without erroring, or any future
     // change that reintroduces a swallowed per-row error) must fail the
     // run loudly instead of shipping an incompletely-indexed store.
-    let endpoints_count: i64 = conn.query_row("SELECT COUNT(*) FROM endpoints", [], |row| row.get(0))?;
+    let endpoints_count: i64 =
+        conn.query_row("SELECT COUNT(*) FROM endpoints", [], |row| row.get(0))?;
     let semantic_count: i64 =
-        conn.query_row("SELECT COUNT(*) FROM semantic_endpoints", [], |row| row.get(0))?;
+        conn.query_row("SELECT COUNT(*) FROM semantic_endpoints", [], |row| {
+            row.get(0)
+        })?;
     if semantic_count != endpoints_count {
         let mut missing_select = conn.prepare(
             "SELECT operation_id FROM endpoints \

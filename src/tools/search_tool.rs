@@ -30,15 +30,15 @@ fn warn_if_incomplete(conn: &Connection) {
             [],
             |row| Ok((row.get(0)?, row.get(1)?)),
         );
-        if let Ok((endpoints_count, semantic_count)) = counts {
-            if semantic_count < endpoints_count {
-                tracing::warn!(
-                    endpoints_count,
-                    semantic_count,
-                    "semantic_endpoints is missing embeddings for some operations; \
-                     search results may be incomplete — re-run populate_embeddings"
-                );
-            }
+        if let Ok((endpoints_count, semantic_count)) = counts
+            && semantic_count < endpoints_count
+        {
+            tracing::warn!(
+                endpoints_count,
+                semantic_count,
+                "semantic_endpoints is missing embeddings for some operations; \
+                 search results may be incomplete — re-run populate_embeddings"
+            );
         }
     });
 }

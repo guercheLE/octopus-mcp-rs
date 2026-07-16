@@ -26,10 +26,7 @@ impl AuthStrategy for ApiKeyStrategy {
         // deployment's auth scheme actually expects (e.g. Octopus's
         // `X-Octopus-ApiKey`) — see `header_location_for`.
         let (_, header_name) = header_location_for(AuthMethod::ApiKey);
-        credentials.insert(
-            "request_header_name".to_string(),
-            header_name.to_string(),
-        );
+        credentials.insert("request_header_name".to_string(), header_name.to_string());
         Ok(credentials)
     }
 
