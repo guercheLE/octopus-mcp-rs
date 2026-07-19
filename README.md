@@ -73,6 +73,45 @@ octopus-mcp start                              # stdio transport (default)
 octopus-mcp http --host 127.0.0.1 --port 3000  # HTTP transport
 ```
 
+### Connect an MCP client
+
+**stdio:** after running `octopus-mcp setup`, configure an MCP host to spawn the server. Include the connection settings printed by the wizard:
+
+```json
+{
+  "mcpServers": {
+    "octopus-mcp": {
+      "command": "octopus-mcp",
+      "args": ["start"],
+      "env": {
+        "OCTOPUS_MCP_URL": "<your target API URL>",
+        "OCTOPUS_MCP_AUTH_METHOD": "apiKey",
+        "OCTOPUS_MCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}
+```
+
+Use the absolute executable path if `octopus-mcp` is not on the MCP host's `PATH`. The stdio server reads the connection settings from this `env` block and uses the credentials saved by `setup`.
+
+**HTTP:** every request must carry its own `X-Octopus-ApiKey` header — HTTP transport intentionally does not fall back to credentials stored on the server:
+
+```json
+{
+  "mcpServers": {
+    "octopus-mcp": {
+      "url": "http://127.0.0.1:3000/mcp",
+      "headers": {
+        "X-Octopus-ApiKey": "<credential value>"
+      }
+    }
+  }
+}
+```
+
+Keep the listener on localhost unless you have added appropriate network access controls and TLS in front of it.
+
 ## Docker
 
 ```bash
