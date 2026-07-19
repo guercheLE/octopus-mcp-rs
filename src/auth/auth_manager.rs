@@ -10,15 +10,29 @@ use super::strategies::api_key::ApiKeyStrategy;
 use super::strategies::stub::StubAuthStrategy;
 
 const CREDENTIAL_ACCOUNT: &str = "active-credentials";
-
-/// Matches `core/config_manager.rs`'s `ENV_PREFIX` — kept as a separate
-/// constant here rather than shared, since that module's `ENV_PREFIX` is
-/// private and pulling in a cross-module dependency for one string literal
-/// isn't worth it.
 const ENV_PREFIX: &str = "OCTOPUS_MCP";
 
-fn env_var(suffix: &str) -> Option<String> {
-    std::env::var(format!("{ENV_PREFIX}_{suffix}")).ok()
+/// Builds an `AuthConfig` straight from the `<PREFIX>_TOKEN`/`_API_KEY`/
+/// `_USERNAME`/`_PASSWORD` env vars documented in `.env.example`, if the
+/// vars this `auth_method` needs are actually set — closes the gap where
+/// those vars were documented but never wired into the credentials lookup,
+/// leaving a prior `setup` run (keychain/file) as the only way to
+/// authenticate. Returns `None` when the required var(s) for this
+/// deployment's `auth_method` aren't present, so callers fall back to the
+/// stored-credential lookup unchanged.
+fn credentials_from_env(auth_method: AuthMethod) -> Option<AuthConfig> {
+    let mut config = AuthConfig::new();
+    match auth_method {
+        AuthMethod::ApiKey => {
+            let api_key = std::env::var(format!("{ENV_PREFIX}_API_KEY"))
+                .or_else(|_| std::env::var(format!("{ENV_PREFIX}_TOKEN")))
+                .ok()?;
+            config.insert("api_key".to_string(), api_key);
+        }
+        #[allow(unreachable_patterns)]
+        _ => return None,
+    }
+    Some(config)
 }
 
 fn strategy_for(auth_method: AuthMethod) -> Box<dyn AuthStrategy> {
@@ -78,7 +92,10 @@ impl AuthManager {
             return self.normalize_credentials(cached).await;
         }
 
-        if let Some(from_env) = self.credentials_from_env().await? {
+        if let Some(env_config) = credentials_from_env(self.auth_method)
+            && let Ok(from_env) = self.strategy.authenticate(&env_config).await
+            && self.strategy.validate_credentials(&from_env)
+        {
             self.cached_credentials = Some(from_env.clone());
             return Ok(from_env);
         }
@@ -136,29 +153,6 @@ impl AuthManager {
         self.strategy.authenticate(credentials).await
     }
 
-    /// `.env.example` documents `OCTOPUS_MCP_TOKEN`/`OCTOPUS_MCP_API_KEY`
-    /// as valid ways to supply credentials, but until this fix nothing
-    /// actually read them — only a prior `setup` run (keychain/file)
-    /// produced working auth. Checked after the in-memory cache but before
-    /// the stored-credential lookup, so an operator can override a stale
-    /// stored credential just by setting the env var, without re-running
-    /// `setup`. Routed through `strategy.authenticate` (not built by hand)
-    /// so the result gets the same scheme-specific normalization — e.g.
-    /// the api_key strategy's `request_header_name` — real credentials do.
-    async fn credentials_from_env(&self) -> anyhow::Result<Option<Credentials>> {
-        match self.auth_method {
-            AuthMethod::ApiKey => {
-                let Some(api_key) = env_var("TOKEN").or_else(|| env_var("API_KEY")) else {
-                    return Ok(None);
-                };
-                let mut config = AuthConfig::new();
-                config.insert("api_key".to_string(), api_key);
-                let credentials = self.strategy.authenticate(&config).await?;
-                Ok(Some(credentials))
-            }
-        }
-    }
-
     /// Decorates outgoing request headers with credentials for `transport`:
     /// on `Transport::Http`, `request_override` (extracted per-request from
     /// the caller's own headers — see `http::auth_extractor`) is the *only*
@@ -170,12 +164,12 @@ impl AuthManager {
     /// `self.credentials()` (config cascade + keychain).
     ///
     /// API-key placement (header vs. query, and the header/param name)
-    /// prefers the strategy-supplied `request_header_name` (e.g.
-    /// `X-Octopus-ApiKey` for this deployment's scheme, via
-    /// `header_location_for`) and only falls back to a generic `X-Api-Key`
-    /// header when no such name is present; a scheme declaring a
-    /// non-header location (query, etc.) is one of Story R6's api-client
-    /// responsibilities to refine, not this manager's.
+    /// defaults to an `X-Api-Key` header here; a scheme declaring a
+    /// different location is one of Story R6's api-client responsibilities
+    /// to refine, not this manager's — `request_override`'s
+    /// `request_header_name`/`request_header_value` pair is the one
+    /// exception, since the HTTP path already knows the scheme's declared
+    /// header name (`RsAuthSchemeView::header_name`) at generation time.
     pub async fn apply_auth_headers(
         &mut self,
         mut headers: std::collections::HashMap<String, String>,
@@ -208,17 +202,12 @@ impl AuthManager {
             credentials.get("request_header_name"),
             credentials.get("request_header_value"),
         ) {
-            // Both halves of this pair only ever arrive together, sourced
-            // from `RequestCredentials::into_credentials_map` on the
-            // HTTP-transport per-request override path.
+            // HTTP-transport relay case: both name and value came from the
+            // caller's own incoming request (`RequestCredentials`).
             headers.insert(name.clone(), value.clone());
         } else if let Some(header) = credentials.get("authorization_header") {
             headers.insert("Authorization".to_string(), header.clone());
         } else if let Some(api_key) = credentials.get("api_key") {
-            // Prefer the scheme's real declared header name (carried
-            // through by the api_key strategy via `request_header_name`,
-            // e.g. `X-Octopus-ApiKey`) over the generic `X-Api-Key`
-            // fallback — see `header_location_for`.
             let header_name = credentials
                 .get("request_header_name")
                 .cloned()

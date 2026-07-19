@@ -10,7 +10,15 @@ Exposes exactly 3 tools — `search`, `get`, `call` — backed by an embedded se
 cargo build --release
 ```
 
+This builds three binaries into `target/release/`: `octopus-mcp` (the CLI/server below), `octopus-mcp-populate-embeddings`, and `octopus-mcp-healthcheck`. Run `cargo install --path .` instead if you want `octopus-mcp` on your `PATH` so the commands below work without a `target/release/` prefix.
+
 Prebuilt binaries for macOS, Linux, and Windows are attached to each [GitHub Release](https://github.com/guercheLE/octopus-mcp-rs/releases), along with a shell/PowerShell installer script.
+
+Or install the published crate directly:
+
+```bash
+cargo install octopus-mcp
+```
 
 ## Setup
 
@@ -18,12 +26,26 @@ Prebuilt binaries for macOS, Linux, and Windows are attached to each [GitHub Rel
 cargo run -- setup
 ```
 
-Interactively collects the API URL and the credentials your chosen auth method needs, then lets you persist them as a `.env` file, a `config.json` file, or a ready-to-run CLI invocation.
+Interactively collects the API URL and the credentials your chosen auth method needs, then lets you persist them as a `.env` file, a local (`./octopus-mcp.config.yml`) or global (`~/.octopus-mcp/config.yml`) YAML config file, or a ready-to-run CLI invocation.
+
+Supported auth methods: `apiKey` (API key, sent as a header).
+
+## Configuration
+
+| Env var | Purpose |
+|---|---|
+| `OCTOPUS_MCP_URL` | Base URL of the target API. |
+| `OCTOPUS_MCP_TOKEN` / `OCTOPUS_MCP_API_KEY` | Overrides any stored credential for token/API-key auth — set either to authenticate without running `setup` first (checked before the OS keychain/encrypted-file fallback). |
+| `OCTOPUS_MCP_LOG_LEVEL` | Log verbosity (`trace`/`debug`/`info`/`warn`/`error`). |
+
+See `.env.example` for the full list of supported variables.
+
+> **Base URL:** some APIs define their OpenAPI `servers[].url` with a path
+> prefix. For `OCTOPUS_MCP_URL`, that prefix is `/api` — set it to something
+> like `https://octopus.example.com/api`, not just `https://octopus.example.com`,
+> or requests will 404.
 
 ## Usage
-
-The `octopus-mcp` binary is built to `target/release/octopus-mcp` (or run any
-subcommand directly via `cargo run --`).
 
 ### Terminal Client (default)
 
@@ -42,14 +64,7 @@ octopus-mcp call createReleaseBySpace --args '{"spaceId":"Spaces-1","body":{"Pro
 
 `call` accepts one JSON object through `--args` (or `-a`), not arbitrary per-operation CLI flags. Use `get <operationId>` to see the accepted field names and which ones are required.
 
-Other terminal subcommands:
-
-```bash
-octopus-mcp test-connection   # verify the configured API URL and credentials are reachable
-octopus-mcp config            # print the resolved configuration (secrets redacted)
-octopus-mcp version           # print the installed version
-octopus-mcp versions          # list the API spec versions this project has a store for
-```
+Other subcommands: `octopus-mcp test-connection` (verify the configured API URL/credentials are reachable), `octopus-mcp config` (print the resolved configuration, secrets redacted), `octopus-mcp version` (print the installed version), and `octopus-mcp versions` (list the API spec versions this project has a store for).
 
 ### Harness Server
 
@@ -58,141 +73,86 @@ octopus-mcp start                              # stdio transport (default)
 octopus-mcp http --host 127.0.0.1 --port 3000  # HTTP transport
 ```
 
-## Configuration
-
-Configuration is resolved through a stop-at-first-match cascade: CLI flags →
-environment variables → `./octopus-mcp.config.yml` → `~/.octopus-mcp/config.yml`
-→ `/etc/octopus-mcp/config.yml` → a `config.yml` next to the installed binary
-→ built-in defaults.
-
-Environment variables all use the `OCTOPUS_MCP_` prefix and map onto the
-`Config` fields the cascade above fills in, e.g. `OCTOPUS_MCP_URL`,
-`OCTOPUS_MCP_AUTH_METHOD` (currently only `apiKey` is supported),
-`OCTOPUS_MCP_LOG_LEVEL`, `OCTOPUS_MCP_TRANSPORT`, `OCTOPUS_MCP_HOST`,
-`OCTOPUS_MCP_PORT`, `OCTOPUS_MCP_RATE_LIMIT`, `OCTOPUS_MCP_TIMEOUT_MS`,
-`OCTOPUS_MCP_RETRY_ATTEMPTS`, and `OCTOPUS_MCP_CORS_ALLOW`. `.env.example`
-also lists `OCTOPUS_MCP_API_KEY`/`OCTOPUS_MCP_TOKEN` — either one, if set,
-is read as a credential override (checked before the keychain/encrypted-file
-store); see [Credential storage](#credential-storage) below.
-
-> **Base URL:** some APIs define their OpenAPI `servers[].url` with a path
-> prefix. For `OCTOPUS_MCP_URL`, that prefix is `/api` — set it to something
-> like `https://octopus.example.com/api`, not just `https://octopus.example.com`,
-> or requests will 404.
-
-`octopus-mcp setup` interactively collects the URL/auth method/etc. and can
-write the non-secret values to a `.env` file (source it into your shell, or
-use it as-is with `docker compose`, before running the binary directly), a
-global config file (`~/.octopus-mcp/config.yml`) or local config file
-(`./octopus-mcp.config.yml`, both read automatically by the cascade above),
-a `config.json` (note: the cascade reads YAML config files, not this one —
-prefer the global/local YAML options if you want a persisted file the
-binary loads automatically), or print a ready-to-run CLI invocation.
-
 ## Docker
 
 ```bash
-# Stdio: the MCP client launches this process and owns its stdin/stdout pipes
-docker compose run --rm -T octopus-mcp start
+# Stdio: the MCP client launches this one-off process and owns its stdin/stdout pipes
+docker compose run --rm -T octopus-mcp
 
-# HTTP: a network endpoint published on http://localhost:3000
-docker compose run --rm --service-ports octopus-mcp-http http
+# HTTP: a long-running network endpoint published on http://localhost:3000
+docker compose up octopus-mcp-http
 ```
 
 Run these commands from the repository root. Docker Compose automatically discovers `docker-compose.yml`; `octopus-mcp` and `octopus-mcp-http` are service names inside that file, not filenames. Writing `docker compose -f docker-compose.yml ...` is equivalent, but `-f` is only needed when the file has another name or location, or when combining multiple Compose files.
 
-Both services read configuration from a local `.env` file (copy
-`.env.example`) and persist config under `~/.octopus-mcp`.
+Both services read configuration from a local `.env` file (copy `.env.example`) and persist credentials and configuration under `~/.octopus-mcp` on the host. For stdio, `-T` disables pseudo-TTY allocation so MCP JSON-RPC stays on raw stdin/stdout, and `--rm` removes the one-off container when the client exits.
 
-Stdio is a process transport, not a listening service: the MCP client must start the server and exchange JSON-RPC over that child process's stdin/stdout. This is useful when a host-side MCP client launches the container on demand, in CI or other one-client automation, or in a custom image where your application launches `octopus-mcp start` as a child process. Merely putting the application and server in the same image—or starting the stdio container separately with `docker compose up`—does not connect them; the parent application must create and own the pipes. One stdio server process normally serves one client. Use HTTP when the client and server are independently managed processes or containers, when other containers need to connect, or when multiple clients need a long-running shared endpoint.
+Stdio is a process transport, not a listening service: the MCP client must start the server and communicate through that exact child process's stdin/stdout. This is useful when an MCP client is configured to launch `docker compose run --rm -T octopus-mcp`, in local scripts or CI that directly exchange MCP messages with the process, or in a custom image where your application launches the generated server's `start` subcommand as a child process. Merely putting the application and server in the same image—or starting the stdio container separately with `docker compose up`—does not connect their streams. One stdio server process normally serves one client. Use HTTP when independently started applications, multiple clients, another container, or a remote machine need to connect over the network.
 
 ## Observability & Resilience
 
 ### Logging
 
-Structured logging goes to **stderr** (stdout is reserved for the MCP
-stdio JSON-RPC frames). Output is JSON, except it auto-switches to a
-pretty-printed format when stderr is an interactive TTY — this is detected
-automatically and has no config flag. Level is controlled by
-`OCTOPUS_MCP_LOG_LEVEL` (a `tracing`/`EnvFilter` string, e.g. `info`,
-`debug`, `octopus_mcp=debug`), defaulting to `info`.
+Structured logs go to **stderr** (never stdout, which is reserved for MCP JSON-RPC frames on stdio transport): JSON by default, pretty-printed automatically when stderr is an interactive TTY (auto-detected — there's no separate flag for this). Level is controlled by `OCTOPUS_MCP_LOG_LEVEL` (default `info`), passed straight through to `tracing_subscriber::EnvFilter`, so directive syntax works too, e.g.:
 
-Secret redaction (`core/sanitizer.rs`) replaces any JSON key containing
-`password`, `token`, `secret`, `authorization`, `apikey`/`api_key`/`api-key`,
-or `credential` with `[REDACTED]` — but it is only actually invoked by
-`octopus-mcp config` (to print the resolved config safely). It is **not**
-wired into the general logging pipeline, so it does not automatically
-redact fields in ordinary log lines.
+```bash
+OCTOPUS_MCP_LOG_LEVEL="octopus_mcp=debug,warn" octopus-mcp start
+```
 
-### Tracing (OpenTelemetry)
+Secret redaction exists as a helper (`core::sanitizer::sanitize`, case-insensitive substring match on keys containing `password`/`token`/`secret`/`authorization`/`apikey`/`api_key`/`api-key`/`credential`), but today its only caller is `octopus-mcp config` (which prints the resolved config with those fields redacted). Request/response payloads aren't logged at all currently — the only `tracing` call sites are lifecycle/error events — so there's no in-flight redaction path exercised in normal operation yet.
 
-An OTLP/HTTP trace exporter is built and attached unconditionally at
-startup (`core/otel.rs`) — there's no config flag to turn it off. The
-collector endpoint isn't one of this project's own settings; it's read by
-the `opentelemetry-otlp` crate from the standard OpenTelemetry SDK
-environment variables (`OTEL_EXPORTER_OTLP_ENDPOINT` /
-`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`), which default to
-`http://localhost:4318` if unset — so with no collector running, spans are
-built and simply fail to send in the background. Only traces are exported
-this way; there is no OpenTelemetry **metrics** pipeline in this codebase.
+### OpenTelemetry tracing
+
+An OTLP/HTTP trace exporter (`core/otel.rs`) is built unconditionally at startup; if it fails to build, tracing export is silently skipped — there's no dedicated on/off switch in this app. It's *tracing only* (no OTel metrics exporter is wired up — see "Metrics" below). Point it at a collector with the OTLP SDK's own standard env vars (not `OCTOPUS_MCP_`-prefixed), which `opentelemetry-otlp` reads directly:
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318 octopus-mcp start
+```
+
+Defaults to `http://localhost:4318` if unset. `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS`, `_PROTOCOL`, `_TIMEOUT`, and `_COMPRESSION` are also honored (standard OTLP conventions).
 
 ### Metrics
 
-A small hand-rolled Prometheus-text counter registry (`http/metrics.rs`) is
-exposed at `GET /metrics` — **HTTP transport only** (there's no metrics
-endpoint in stdio mode). Today it tracks exactly one counter,
-`http_requests_total`, incremented on every HTTP request that passes the
-auth gate (including scrapes of `/metrics` itself).
+Separate from OTel: `GET /metrics` (HTTP transport only — not available over stdio) serves a minimal hand-rolled Prometheus-text counter store (`http/metrics.rs`). Today it only tracks one counter, `http_requests_total`:
+
+```bash
+curl http://127.0.0.1:3000/metrics
+# http_requests_total 4
+```
+
+### Circuit breaker, retries, and rate limiting
+
+Every outbound call to the target API (`services/api_client.rs`) passes through a rate limiter, then a circuit breaker, then the retry loop:
+
+| Behavior | Configurable? | Knob | Default |
+|---|---|---|---|
+| Request timeout | Yes | `OCTOPUS_MCP_TIMEOUT_MS` / `timeout_ms` | 30000 ms |
+| Retry attempts on request failure | Yes | `OCTOPUS_MCP_RETRY_ATTEMPTS` / `retry_attempts` | 3 (immediate retry, no backoff/jitter) |
+| Rate limit | Partially | `OCTOPUS_MCP_RATE_LIMIT` / `rate_limit` | 100 calls; window is hardcoded to 1 second, not configurable |
+| Circuit breaker | **No** | — (`CircuitBreaker::default()`) | opens after 5 consecutive failures, 30s before a half-open trial call |
+
+("Knob" here means an env var or a matching key in `octopus-mcp.config.yml`/`~/.octopus-mcp/config.yml`/`/etc/octopus-mcp/config.yml` — see the config cascade in `core/config_manager.rs`.)
 
 ### Health checks
 
-Under HTTP transport, `GET /healthz` returns `200` (or `503` if unhealthy)
-with the number of registered components and their aggregate status. Only
-one check is currently registered — `store`, which just confirms
-`mcp_store.db` opens — polled every 30s with a 5s timeout, both hardcoded
-in `core/health_check_manager.rs` (no config knob for either). Under stdio
-transport there's no HTTP endpoint to probe at all.
+`GET /healthz` (HTTP transport only) reports the status of a `ComponentRegistry`, refreshed every 30 seconds with a 5-second per-check timeout by a `HealthCheckManager` — both intervals are hardcoded, not configurable. Today exactly one check is registered, `store` (can the active `mcp_store*.db` file be opened), marked critical:
 
-Separately, `octopus-mcp-healthcheck` is a standalone binary (used by the
-`Dockerfile`'s `HEALTHCHECK` instruction) that only checks that
-`mcp_store.db` is present and readable on disk — it does not call the
-running server. For a live check of the actual configured Octopus Server
-API and credentials, use `octopus-mcp test-connection` instead.
+```bash
+curl http://127.0.0.1:3000/healthz
+# {"status":"Healthy","components":1}   # 503 + "Unhealthy" if the critical check is failing
+```
 
-### Resilience: retries, rate limiting, circuit breaker
-
-All three live in `services/api_client.rs`, wrapping every outbound call to
-the target API:
-
-- **Rate limiting** — a sliding-window limiter; the request cap is
-  configurable via `OCTOPUS_MCP_RATE_LIMIT` (default `100`), but the window
-  is hardcoded to 1 second and not configurable.
-- **Retries** — on a transport-level failure, the request is retried
-  immediately (no backoff delay) up to `OCTOPUS_MCP_RETRY_ATTEMPTS` times
-  (default `3`, so up to 4 attempts total). Per-request timeout is
-  `OCTOPUS_MCP_TIMEOUT_MS` (default `30000`).
-- **Circuit breaker** — opens after 5 consecutive failures and stays open
-  for 30 seconds before allowing one half-open trial call
-  (`core/circuit_breaker.rs`). These two numbers are hardcoded
-  (`CircuitBreaker::default()`) with **no environment variable, config
-  file key, or CLI flag** to change them.
+Two related but distinct checks exist:
+- `octopus-mcp-healthcheck` — the standalone binary wired into the Dockerfile's `HEALTHCHECK`; it only checks that the active store file exists and is readable on disk, and does not talk to a running server or `/healthz`.
+- `octopus-mcp test-connection` — an on-demand CLI check that the *target API itself* is reachable with the configured credentials; unrelated to the periodic `/healthz` checks above.
 
 ### Credential storage
 
-`octopus-mcp setup` always persists the credential it collects (e.g. the
-API key) via `core/credential_storage.rs`, under service name
-`octopus-mcp`: it first tries the OS-native secret store (macOS Keychain,
-Windows Credential Manager, or Linux Secret Service via the `keyring`
-crate). If that backend is unavailable — common in headless containers
-with no D-Bus secret-service daemon — it falls back automatically to an
-AES-256-GCM-encrypted file at `~/.octopus-mcp/credentials.enc` (created
-with `0600`/`0700` permissions on Unix), keyed by a hash of `$HOME`, so the
-file isn't portable to another machine. This is the *only* place the
-credential is stored or read from for stdio transport — it is never read
-from an `OCTOPUS_MCP_*` environment variable or a config file (see the
-`.env.example` caveat under [Configuration](#configuration)). HTTP
-transport never touches this store at all: every request must carry its
-own credential header, checked per-call.
+`octopus-mcp setup` writes credentials straight to the OS-native secret store via the `keyring` crate (macOS Keychain / Windows Credential Manager / Linux Secret Service), under service `octopus-mcp`, account `active-credentials`. If no OS keychain backend is available (e.g. no D-Bus secret-service daemon in a minimal container), it falls back automatically to an AES-256-GCM-encrypted file at `~/.octopus-mcp/credentials.enc` (`0600`, parent dir `0700` on Unix); the key is derived from `$HOME` plus the service name, so that file isn't portable to another machine.
+
+The `OCTOPUS_MCP_TOKEN`/`OCTOPUS_MCP_API_KEY` (for token/API-key auth) env vars documented in `.env.example` are read directly by `AuthManager::credentials()` and take priority over the stored keychain/file credentials — useful for supplying credentials purely via environment (e.g. in a container) without ever running `setup`.
+
+Credentials are never persisted into the `.env`/config-file output of `setup` itself; those files only carry non-secret settings, with credentials always going through the keychain/encrypted-file path.
 
 ## Testing
 
@@ -203,21 +163,23 @@ cargo test
 ## Coverage
 
 ```bash
-bash scripts/coverage.sh   # writes target/coverage/html/index.html (requires cargo-llvm-cov)
+bash scripts/coverage.sh   # generates HTML and fails below 85% production-line coverage
 ```
+
+The 85% gate counts executable production lines under `src/` and removes inline `#[cfg(test)]` module bodies from the LCOV denominator, so adding test code cannot inflate the result. The unfiltered annotated HTML remains useful for line-by-line analysis at `target/coverage/html/index.html`; the gate's machine-readable input is `target/coverage/production-lcov.info`. The command requires Python 3, `cargo-llvm-cov`, and the `llvm-tools-preview` Rust component.
 
 ## Profiling
 
 ```bash
-bash scripts/profile.sh   # CPU profiling via samply, writes profile/bottleneck-report.md
-cargo run --release --features profiling -- search "test query"   # heap profiling via dhat-rs, writes dhat-heap.json
+bash scripts/profile.sh        # clean CPU profiling via samply
+bash scripts/profile-heap.sh   # steady-state heap profiling via dhat-rs
 ```
 
-`profile/bottleneck-report.md` combines coverage gaps with the hottest CPU functions in one small text file — paste it into an LLM (or hand it to another tool) to find and fix bottlenecks. Requires [samply](https://github.com/mstange/samply) (`cargo install samply`).
+CPU and heap profiling use separate builds: `scripts/profile.sh` deliberately profiles normal release binaries so DHAT allocation tracking cannot distort CPU samples, while `scripts/profile-heap.sh` starts DHAT collection only after its warmup search. CPU profiling records `profile/cold-start.json.gz` from a one-shot CLI search, then attaches to an already-initialized search harness and records `profile/warm-search.json.gz`; this keeps model initialization from being mistaken for steady-state request cost. Heap profiling defaults to 1 warmup and 5 measured searches, configurable with `PROFILE_HEAP_WARMUPS`, `PROFILE_HEAP_ITERATIONS`, and `PROFILE_QUERY`. Both scripts supply harmless URL/auth defaults when a generated checkout has not been configured because catalog search never calls the generated API. `profile/bottleneck-report.md` ranks coverage gaps and shows separate cold and warm CPU summaries. Requires [samply](https://github.com/mstange/samply) (`cargo install samply`).
 
 ## License
 
-[MIT](LICENSE)
+MIT — see [LICENSE](LICENSE).
 
 ---
 

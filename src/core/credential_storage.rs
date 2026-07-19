@@ -11,11 +11,12 @@ use sha2::{Digest, Sha256};
 
 const SERVICE_NAME: &str = "octopus-mcp";
 
-/// Resolves the current user's home directory: tries `HOME` first (set on
-/// macOS/Linux and in most containers), then `USERPROFILE` (Windows' native
-/// equivalent, since `HOME` is not guaranteed to be set there), then falls
-/// back to `.` (cwd) if neither is set.
-fn resolve_home_dir() -> PathBuf {
+/// Resolves the user's home directory cross-platform: `HOME` (Unix/macOS),
+/// falling back to `USERPROFILE` (Windows), falling back to the current
+/// directory if neither is set — without this fallback, Windows deployments
+/// silently resolve config/credential paths to `.` (cwd) instead of erroring
+/// or using the user's actual profile directory.
+pub fn resolve_home_dir() -> PathBuf {
     std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
         .map(PathBuf::from)
@@ -146,13 +147,12 @@ pub fn save_credential(account: &str, value: &str) -> anyhow::Result<()> {
 pub fn load_credential(account: &str) -> anyhow::Result<Option<String>> {
     match Entry::new(SERVICE_NAME, account).and_then(|entry| entry.get_password()) {
         Ok(password) => Ok(Some(password)),
-        // A clean "no entry" from the keychain doesn't necessarily mean no
-        // credential exists — it may have only ever been written to the
-        // encrypted-file fallback (e.g. because the keychain backend was
-        // unavailable at save time and has since become available again,
-        // with no matching entry of its own). Consult the file before
-        // giving up, same as for any other keychain error.
-        Err(keyring::Error::NoEntry) | Err(_) => load_from_file(account),
+        // A clean "no entry" from the keychain doesn't rule out a
+        // credential that only ever landed in the encrypted-file fallback
+        // (e.g. saved while the keychain backend was unavailable) — always
+        // consult the file before reporting nothing found, whether the
+        // keychain returned `NoEntry` or a harder error.
+        Err(_) => load_from_file(account),
     }
 }
 

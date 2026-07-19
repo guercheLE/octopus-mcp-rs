@@ -2,8 +2,9 @@
 //
 // Interactive setup wizard (REQ-1.6): collects the API URL and the
 // credentials the discovered auth scheme(s) need, then persists them per
-// the operator's choice: a .env file, a config.json file, or a
-// ready-to-run CLI invocation printed to stdout (nothing written to disk).
+// the operator's choice: a .env file, a local or global config.yml file,
+// or a ready-to-run CLI invocation printed to stdout (nothing written to
+// disk).
 // `inquire`'s prompts are blocking — run through `spawn_blocking`, the
 // same pattern mcpify's own `auth_profile::prompt` documents for calling
 // it from an async runtime.
@@ -17,15 +18,6 @@ use octopus_mcp::core::credential_storage::save_credential;
 fn to_env_key(key: &str) -> String {
     key.to_uppercase()
 }
-
-/// Must stay in sync with `core::config_manager`'s own `CONFIG_DIR_NAME` /
-/// `LOCAL_CONFIG_FILE` constants (private to that module) — this is the
-/// exact filename/tier pair `load_config`'s cascade actually reads back, so
-/// writing anything else here would silently orphan the persisted file
-/// (the bug this fix closes).
-const CONFIG_DIR_NAME: &str = ".octopus-mcp";
-const LOCAL_CONFIG_FILE: &str = "octopus-mcp.config.yml";
-const GLOBAL_CONFIG_FILE: &str = "config.yml";
 
 async fn prompt_base_url() -> anyhow::Result<String> {
     let url =
@@ -77,37 +69,59 @@ async fn prompt_transport() -> anyhow::Result<Transport> {
 }
 
 async fn prompt_credentials(auth_method: AuthMethod) -> anyhow::Result<HashMap<String, String>> {
-    tokio::task::spawn_blocking(move || -> anyhow::Result<HashMap<String, String>> {
-        let mut credentials = HashMap::new();
-        match auth_method {
-            AuthMethod::ApiKey => {
+    match auth_method {
+        AuthMethod::ApiKey => {
+            tokio::task::spawn_blocking(move || -> anyhow::Result<HashMap<String, String>> {
+                let mut credentials = HashMap::new();
                 credentials.insert(
                     "api_key".to_string(),
                     inquire::Password::new("API key:")
                         .without_confirmation()
                         .prompt()?,
                 );
-            }
+                Ok(credentials)
+            })
+            .await?
         }
-        Ok(credentials)
-    })
-    .await?
+    }
 }
 
-/// `config_fields` holds the *unprefixed*, lowercase config-cascade keys
-/// (`url`, `auth_method`, `api_version`, `transport` — matching
-/// `core::config_manager::env_overrides`'s `config_key` column), deliberately
-/// excluding credentials: those are never written to a config file, only to
-/// the keychain/encrypted-file store via `save_credential`.
+/// Persists the non-secret config fields (`url`/`auth_method`/`api_version`/
+/// `transport`) as YAML matching exactly what `config_manager::load_config`
+/// reads back — never the credential fields, which stay in the OS
+/// keychain/encrypted-file fallback via `save_credential` (called by the
+/// caller before this runs). Writing anywhere else (a stray `.env`-only
+/// var name, `config.json`, etc.) would leave the persisted config silently
+/// ignored on every subsequent run, since `load_config`'s cascade only ever
+/// reads `./octopus-mcp.config.yml` (local) or
+/// `~/.octopus-mcp/config.yml` (global).
+async fn write_config_yaml(
+    path: &std::path::Path,
+    config_fields: &serde_json::Value,
+) -> anyhow::Result<()> {
+    let yaml = serde_yaml::to_string(config_fields)?;
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, yaml)?;
+    println!("Wrote {}", path.display());
+    println!(
+        "Credentials are never written to this file — they're stored via the OS \
+         keychain/encrypted-file fallback from the credential prompt above."
+    );
+    Ok(())
+}
+
 async fn prompt_persistence(
     env: &HashMap<String, String>,
-    config_fields: &HashMap<String, String>,
+    config_fields: &serde_json::Value,
 ) -> anyhow::Result<()> {
     let choices = vec![
         "Write a .env file",
-        "Write a config.json file",
-        "Write a global config file (~/.octopus-mcp/config.yml, read on every run)",
-        "Write a local config file (./octopus-mcp.config.yml, read on every run from this directory)",
+        "Write a config.yml file (global — ~/.octopus-mcp/config.yml, read on every invocation on this machine)",
+        "Write a config.yml file (local — ./octopus-mcp.config.yml, read only from this directory)",
         "Print a ready-to-run CLI invocation (nothing written to disk)",
     ];
     let selection = tokio::task::spawn_blocking(move || {
@@ -115,6 +129,27 @@ async fn prompt_persistence(
     })
     .await??;
 
+    persist_selection(selection, env, config_fields).await
+}
+
+async fn persist_selection(
+    selection: &str,
+    env: &HashMap<String, String>,
+    config_fields: &serde_json::Value,
+) -> anyhow::Result<()> {
+    let local_dir = std::env::current_dir()?;
+    let global_config =
+        octopus_mcp::core::credential_storage::resolve_home_dir().join(".octopus-mcp/config.yml");
+    persist_selection_at(selection, env, config_fields, &local_dir, &global_config).await
+}
+
+async fn persist_selection_at(
+    selection: &str,
+    env: &HashMap<String, String>,
+    config_fields: &serde_json::Value,
+    local_dir: &std::path::Path,
+    global_config: &std::path::Path,
+) -> anyhow::Result<()> {
     match selection {
         "Write a .env file" => {
             let contents = env
@@ -122,31 +157,14 @@ async fn prompt_persistence(
                 .map(|(key, value)| format!("{key}={value}"))
                 .collect::<Vec<_>>()
                 .join("\n");
-            std::fs::write(".env", format!("{contents}\n"))?;
+            std::fs::write(local_dir.join(".env"), format!("{contents}\n"))?;
             println!("Wrote .env");
         }
-        "Write a config.json file" => {
-            std::fs::write("config.json", serde_json::to_string_pretty(env)?)?;
-            println!(
-                "Wrote config.json (note: the config-loading cascade reads YAML files, not \
-                 this one — pick a global/local config file option above if you want a file \
-                 the binary reads back automatically)"
-            );
+        s if s.starts_with("Write a config.yml file (global") => {
+            write_config_yaml(global_config, config_fields).await?;
         }
-        selection if selection.starts_with("Write a global config file") => {
-            let home = std::env::var_os("HOME")
-                .or_else(|| std::env::var_os("USERPROFILE"))
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| std::path::PathBuf::from("."));
-            let dir = home.join(CONFIG_DIR_NAME);
-            std::fs::create_dir_all(&dir)?;
-            let path = dir.join(GLOBAL_CONFIG_FILE);
-            std::fs::write(&path, serde_yaml::to_string(config_fields)?)?;
-            println!("Wrote {}", path.display());
-        }
-        selection if selection.starts_with("Write a local config file") => {
-            std::fs::write(LOCAL_CONFIG_FILE, serde_yaml::to_string(config_fields)?)?;
-            println!("Wrote {LOCAL_CONFIG_FILE}");
+        s if s.starts_with("Write a config.yml file (local") => {
+            write_config_yaml(&local_dir.join("octopus-mcp.config.yml"), config_fields).await?;
         }
         _ => {
             let flags = env
@@ -160,6 +178,43 @@ async fn prompt_persistence(
         }
     }
     Ok(())
+}
+
+fn build_runtime_settings(
+    url: String,
+    auth_method: AuthMethod,
+    api_version: String,
+    transport: Transport,
+    credentials: &HashMap<String, String>,
+) -> anyhow::Result<(HashMap<String, String>, serde_json::Value)> {
+    let mut env = HashMap::new();
+    env.insert("OCTOPUS_MCP_URL".to_string(), url);
+    env.insert(
+        "OCTOPUS_MCP_AUTH_METHOD".to_string(),
+        serde_json::to_value(auth_method)?
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
+    );
+    env.insert("OCTOPUS_MCP_API_VERSION".to_string(), api_version);
+    env.insert(
+        "OCTOPUS_MCP_TRANSPORT".to_string(),
+        serde_json::to_value(transport)?
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
+    );
+    for (key, value) in credentials {
+        env.insert(format!("OCTOPUS_MCP_{}", to_env_key(key)), value.clone());
+    }
+
+    let config_fields = serde_json::json!({
+        "url": env.get("OCTOPUS_MCP_URL"),
+        "auth_method": env.get("OCTOPUS_MCP_AUTH_METHOD"),
+        "api_version": env.get("OCTOPUS_MCP_API_VERSION"),
+        "transport": env.get("OCTOPUS_MCP_TRANSPORT"),
+    });
+    Ok((env, config_fields))
 }
 
 /// Prints a ready-to-use MCP client config (the `mcpServers` block a host
@@ -235,45 +290,8 @@ pub async fn run_setup_wizard() -> anyhow::Result<()> {
 
     save_credential("active-credentials", &serde_json::to_string(&credentials)?)?;
 
-    let mut env: HashMap<String, String> = HashMap::new();
-    env.insert("OCTOPUS_MCP_URL".to_string(), url);
-    env.insert(
-        "OCTOPUS_MCP_AUTH_METHOD".to_string(),
-        serde_json::to_value(auth_method)?
-            .as_str()
-            .unwrap_or_default()
-            .to_string(),
-    );
-    env.insert("OCTOPUS_MCP_API_VERSION".to_string(), api_version);
-    env.insert(
-        "OCTOPUS_MCP_TRANSPORT".to_string(),
-        serde_json::to_value(transport)?
-            .as_str()
-            .unwrap_or_default()
-            .to_string(),
-    );
-    for (key, value) in &credentials {
-        env.insert(format!("OCTOPUS_MCP_{}", to_env_key(key)), value.clone());
-    }
-
-    // Non-secret config-cascade fields only, in the unprefixed lowercase
-    // shape `load_config`'s YAML readers expect — credentials are
-    // deliberately excluded (they go through `save_credential` above, not
-    // into a config file).
-    let mut config_fields: HashMap<String, String> = HashMap::new();
-    config_fields.insert("url".to_string(), env["OCTOPUS_MCP_URL"].clone());
-    config_fields.insert(
-        "auth_method".to_string(),
-        env["OCTOPUS_MCP_AUTH_METHOD"].clone(),
-    );
-    config_fields.insert(
-        "api_version".to_string(),
-        env["OCTOPUS_MCP_API_VERSION"].clone(),
-    );
-    config_fields.insert(
-        "transport".to_string(),
-        env["OCTOPUS_MCP_TRANSPORT"].clone(),
-    );
+    let (env, config_fields) =
+        build_runtime_settings(url, auth_method, api_version, transport, &credentials)?;
 
     prompt_persistence(&env, &config_fields).await?;
     print_mcp_client_config(transport, auth_method, &env);
@@ -284,4 +302,97 @@ pub async fn run_setup_wizard() -> anyhow::Result<()> {
     };
     println!("Setup complete! Run: octopus-mcp {run_command}");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn runtime_settings_keep_config_fields_and_filter_ephemeral_oauth_values() {
+        let credentials = HashMap::from([
+            ("client_id".to_string(), "client".to_string()),
+            ("authorization_code".to_string(), "spent-code".to_string()),
+        ]);
+        let (env, config) = build_runtime_settings(
+            "https://api.example/v1".to_string(),
+            AuthMethod::ApiKey,
+            "2023.4.82.90".to_string(),
+            Transport::Stdio,
+            &credentials,
+        )
+        .unwrap();
+
+        assert_eq!(config["url"], "https://api.example/v1");
+        assert_eq!(config["transport"], "stdio");
+        assert_eq!(env["OCTOPUS_MCP_CLIENT_ID"], "client");
+        assert_eq!(env["OCTOPUS_MCP_AUTHORIZATION_CODE"], "spent-code");
+    }
+
+    #[tokio::test]
+    async fn noninteractive_output_paths_cover_both_transports() {
+        let credentials = HashMap::new();
+        let (env, config) = build_runtime_settings(
+            "https://api.example/v1".to_string(),
+            prompt_auth_method().await.unwrap(),
+            prompt_api_version().await.unwrap(),
+            Transport::Http,
+            &credentials,
+        )
+        .unwrap();
+        persist_selection("Print a ready-to-run CLI invocation", &env, &config)
+            .await
+            .unwrap();
+        print_mcp_client_config(Transport::Stdio, AuthMethod::ApiKey, &env);
+        print_mcp_client_config(Transport::Http, AuthMethod::ApiKey, &env);
+    }
+
+    #[tokio::test]
+    async fn file_persistence_writes_env_local_yaml_and_global_yaml() {
+        let dir = tempfile::tempdir().unwrap();
+        let local_dir = dir.path().join("local");
+        let global_config = dir.path().join("global/config.yml");
+        std::fs::create_dir_all(&local_dir).unwrap();
+
+        let credentials = HashMap::new();
+        let (env, config) = build_runtime_settings(
+            "https://api.example/v1".to_string(),
+            AuthMethod::ApiKey,
+            "2023.4.82.90".to_string(),
+            Transport::Stdio,
+            &credentials,
+        )
+        .unwrap();
+        persist_selection_at(
+            "Write a .env file",
+            &env,
+            &config,
+            &local_dir,
+            &global_config,
+        )
+        .await
+        .unwrap();
+        persist_selection_at(
+            "Write a config.yml file (local — ./octopus-mcp.config.yml, read only from this directory)",
+            &env,
+            &config,
+            &local_dir,
+            &global_config,
+        )
+        .await
+        .unwrap();
+        persist_selection_at(
+            "Write a config.yml file (global — ~/.octopus-mcp/config.yml, read on every invocation on this machine)",
+            &env,
+            &config,
+            &local_dir,
+            &global_config,
+        )
+        .await
+        .unwrap();
+
+        assert!(local_dir.join(".env").is_file());
+        assert!(local_dir.join("octopus-mcp.config.yml").is_file());
+        assert!(global_config.is_file());
+    }
 }
