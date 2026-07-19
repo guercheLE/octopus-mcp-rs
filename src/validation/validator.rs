@@ -201,4 +201,52 @@ mod tests {
         let err = validate_against(cache, "test_op_missing", &schema, &serde_json::json!({}));
         assert!(err.is_err());
     }
+
+    #[test]
+    fn validate_against_falls_back_to_an_always_valid_schema_when_compilation_fails() {
+        static CACHE: OnceLock<Mutex<HashMap<String, jsonschema::Validator>>> = OnceLock::new();
+        let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+        // "not-a-real-type" isn't a recognized JSON Schema `type` value, so
+        // `jsonschema::validator_for` fails to compile it — exercising the
+        // always-valid-empty-schema fallback rather than a real validator.
+        let uncompilable_schema = serde_json::json!({"type": "not-a-real-type"});
+
+        let result = validate_against(
+            cache,
+            "test_op_uncompilable_schema",
+            &uncompilable_schema,
+            &serde_json::json!({"anything": true}),
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn validate_input_reports_a_real_missing_required_field() {
+        let err = validate_input(
+            "2023.4.82.90",
+            "getAccountById_LegacyDefaultSpace",
+            &Value::Null,
+        )
+        .unwrap_err();
+        assert_eq!(err.code(), "VALIDATION_ERROR");
+        assert!(
+            err.to_string()
+                .contains("getAccountById_LegacyDefaultSpace")
+        );
+    }
+
+    #[test]
+    fn validate_output_reports_a_real_schema_violation() {
+        let err = validate_output(
+            "2023.4.82.90",
+            "getAccountById_LegacyDefaultSpace",
+            &serde_json::json!({"AccountType": "NotARealAccountType"}),
+        )
+        .unwrap_err();
+        assert_eq!(err.code(), "VALIDATION_ERROR");
+        assert!(
+            err.to_string()
+                .contains("getAccountById_LegacyDefaultSpace")
+        );
+    }
 }
