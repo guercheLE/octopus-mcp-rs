@@ -292,4 +292,105 @@ mod tests {
 
         assert!(result.is_err());
     }
+
+    // SAFETY: test-only env mutation. Cleaned up immediately after use so
+    // the window where another parallel test could observe it stays as
+    // short as possible (matching the pattern other modules already use
+    // for HOME, since neither `AuthManager` nor `credential_storage` take
+    // an injectable env/config source).
+    #[tokio::test]
+    async fn env_var_credentials_are_used_when_nothing_is_cached() {
+        unsafe {
+            std::env::set_var("OCTOPUS_MCP_API_KEY", "from-the-environment");
+        }
+        let mut manager = AuthManager::new(AuthMethod::ApiKey);
+        let resolved = manager.credentials().await;
+        unsafe {
+            std::env::remove_var("OCTOPUS_MCP_API_KEY");
+        }
+
+        let resolved = resolved.unwrap();
+        assert_eq!(
+            resolved.get("api_key").map(String::as_str),
+            Some("from-the-environment")
+        );
+    }
+
+    #[tokio::test]
+    async fn normalize_credentials_passes_through_an_already_usable_shape() {
+        let manager = AuthManager::new(AuthMethod::ApiKey);
+        let credentials = Credentials::from([("api_key".to_string(), "abc".to_string())]);
+        let normalized = manager.normalize_credentials(&credentials).await.unwrap();
+        assert_eq!(normalized, credentials);
+    }
+
+    #[tokio::test]
+    async fn normalize_credentials_wraps_a_bare_access_token_as_a_bearer_header() {
+        let manager = AuthManager::new(AuthMethod::ApiKey);
+        let credentials = Credentials::from([("access_token".to_string(), "tok123".to_string())]);
+        let normalized = manager.normalize_credentials(&credentials).await.unwrap();
+        assert_eq!(
+            normalized.get("authorization_header").map(String::as_str),
+            Some("Bearer tok123")
+        );
+    }
+
+    #[tokio::test]
+    async fn normalize_credentials_falls_through_to_the_strategy_for_an_unrecognized_shape() {
+        let manager = AuthManager::new(AuthMethod::ApiKey);
+        let credentials = Credentials::from([("nonsense".to_string(), "x".to_string())]);
+        // ApiKeyStrategy::authenticate requires "api_key", so this shape
+        // (neither a known field nor an access token) surfaces its error.
+        assert!(manager.normalize_credentials(&credentials).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn stdio_transport_prefers_an_existing_authorization_header() {
+        let mut manager = AuthManager::new(AuthMethod::ApiKey);
+        manager.set_credentials(Credentials::from([
+            ("api_key".to_string(), "abc".to_string()),
+            (
+                "authorization_header".to_string(),
+                "Bearer preformatted".to_string(),
+            ),
+        ]));
+
+        let headers = manager
+            .apply_auth_headers(
+                std::collections::HashMap::new(),
+                "GET",
+                "https://example.com",
+                Transport::Stdio,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            headers.get("Authorization").map(String::as_str),
+            Some("Bearer preformatted")
+        );
+    }
+
+    #[tokio::test]
+    async fn stdio_transport_falls_back_to_the_default_api_key_header_name() {
+        let mut manager = AuthManager::new(AuthMethod::ApiKey);
+        manager.set_credentials(Credentials::from([(
+            "api_key".to_string(),
+            "abc".to_string(),
+        )]));
+
+        let headers = manager
+            .apply_auth_headers(
+                std::collections::HashMap::new(),
+                "GET",
+                "https://example.com",
+                Transport::Stdio,
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(headers.get("X-Api-Key").map(String::as_str), Some("abc"));
+    }
 }
