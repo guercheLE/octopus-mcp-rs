@@ -20,7 +20,7 @@ Search for how to connect/convert a project to version control, supplying the re
 
 ## Step 3 — know the fork going forward
 
-Once connected, deployment-process and deployment-settings operations split into two families: the plain (database) form and a `gitRef`-parameterized form. Ask the user which branch they mean before calling the git form — don't assume `main`/`master` or any other default. If the project *isn't* connected to version control, use the plain database-backed operations instead (see `octopus_workflow_projects`, which also covers the database form of deployment settings — release-creation strategy, connectivity policy, default channel).
+Once connected, deployment-process and deployment-settings operations split into two families: the plain (database) form and a `gitRef`-parameterized form. Ask the user which branch they mean before calling the git form — don't assume `main`/`master` or any other default. If the project *isn't* connected to version control, use the plain database-backed operations instead (see `octopus-projects`, which also covers the database form of deployment settings — release-creation strategy, connectivity policy, default channel).
 
 ## Step 4 — a worked example
 
@@ -32,4 +32,4 @@ If the user reports that git-sourced data looks out of date after a push to the 
 
 ## Composing with other workflows
 
-Everything about the project that *doesn't* depend on this fork (project groups, triggers, tenanted-deployment mode) is unchanged — see `octopus_workflow_projects`. The deployment itself, once a release is cut, proceeds exactly as `octopus_workflow_release_deployment` describes regardless of whether the project is version-controlled.
+Everything about the project that *doesn't* depend on this fork (project groups, triggers, tenanted-deployment mode) is unchanged — see `octopus-projects`. The deployment itself, once a release is cut, proceeds exactly as `octopus-release-deployment` describes regardless of whether the project is version-controlled.

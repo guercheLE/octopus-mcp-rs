@@ -9,7 +9,7 @@ These operations are independent of each other and of the space-scoped domains c
 - **Email notifications not arriving?** Search for how to get/update the SMTP configuration, and how to check whether SMTP is configured, before assuming a deeper bug.
 - **Login/SSO questions?** Search for how to list authentication providers.
 - **HA cluster health?** Search for how to list Octopus Server nodes and ping one; a node's task-count detail is a separate operation from its summary listing.
-- **A deployment target unreachable through a corporate network?** Search for how to list/create proxies — this is the network-egress configuration, distinct from the target's own credentials (see `octopus_workflow_infrastructure`).
+- **A deployment target unreachable through a corporate network?** Search for how to list/create proxies — this is the network-egress configuration, distinct from the target's own credentials (see `octopus-infrastructure`).
 - **A scheduled/maintenance job not running?** Search for the scheduler's status, and its enable/trigger-now/logs operations — don't assume a job is broken before checking whether it (or the scheduler as a whole) is simply disabled.
 - **Feature flags / experimental settings?** Search for the dynamic-extensions feature metadata and values operations.
 - **Notify an external system on Octopus events?** Search for how to list/create a subscription (webhook).

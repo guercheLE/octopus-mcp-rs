@@ -14,7 +14,7 @@ Search for how to take responsibility for an interruption. This is gated by team
 
 ## Step 2 — understand why the interruption exists
 
-Every interruption originates from a specific deployment or runbook-run task. If the user wants context before deciding, fetch that task's detail — reuse `octopus_workflow_release_deployment`'s or `octopus_workflow_runbooks`' task-polling guidance for how to read a task's status/log rather than re-deriving it here; don't fetch a full log speculatively, only if the user needs the detail to decide.
+Every interruption originates from a specific deployment or runbook-run task. If the user wants context before deciding, fetch that task's detail — reuse `octopus-release-deployment`'s or `octopus-runbooks`' task-polling guidance for how to read a task's status/log rather than re-deriving it here; don't fetch a full log speculatively, only if the user needs the detail to decide.
 
 ## Step 3 — submit the response
 
@@ -22,10 +22,10 @@ Search for how to get the interruption's own detail first — its form fields ar
 
 ## Step 4 — confirm the blocked task resumed
 
-**Gate:** poll the originating deployment/runbook-run task's status (again, per `octopus_workflow_release_deployment`'s Step 4 pattern) to confirm it actually continued and reached a final state, rather than assuming the submit call's success implies the task is unblocked.
+**Gate:** poll the originating deployment/runbook-run task's status (again, per `octopus-release-deployment`'s Step 4 pattern) to confirm it actually continued and reached a final state, rather than assuming the submit call's success implies the task is unblocked.
 
 ## Composing with other workflows
 
-Step 2 and Step 4 deliberately reuse `octopus_workflow_release_deployment`'s and `octopus_workflow_runbooks`' task-polling steps rather than duplicating them — fetch those prompts for the full detail.
+Step 2 and Step 4 deliberately reuse `octopus-release-deployment`'s and `octopus-runbooks`' task-polling steps rather than duplicating them — fetch those prompts for the full detail.
 
 Every operation above should be reached by searching for what it does, then reading the schema `get` returns before relying on any field name — this Octopus Server version supports interruption take-responsibility/submit actions, but a search-first approach is what keeps this prompt correct if it's ever run against a different, older API version this server might facade.

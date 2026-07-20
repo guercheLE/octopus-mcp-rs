@@ -6,4 +6,4 @@ This sub-workflow is designed to be run as an isolated sub-task where possible �
 
 Search for how to list/create/update a tenant, how to connect a tenant to a project and environment, how to get/set a tenant's variables, and how to list/create tag sets and tags. Read the schema `get` returns before relying on any field name.
 
-A tenant must be connected to both the target project *and* the target environment before a tenanted deployment can succeed — if the user is preparing a tenant for a deployment, confirm the connection exists (don't just create the tenant and assume it's ready). See `octopus_workflow_release_deployment` for how this fits into an actual deployment.
+A tenant must be connected to both the target project *and* the target environment before a tenanted deployment can succeed — if the user is preparing a tenant for a deployment, confirm the connection exists (don't just create the tenant and assume it's ready). See `octopus-release-deployment` for how this fits into an actual deployment.

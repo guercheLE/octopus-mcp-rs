@@ -51,33 +51,31 @@ async fn prompts_list_advertises_the_full_workflow_surface() {
     names.sort_unstable();
 
     let mut expected = vec![
-        "octopus_workflow",
-        "octopus_workflow_release_deployment",
-        "octopus_workflow_projects",
-        "octopus_workflow_environments_lifecycles",
-        "octopus_workflow_tenants",
-        "octopus_workflow_variables",
-        "octopus_workflow_runbooks",
-        "octopus_workflow_infrastructure",
-        "octopus_workflow_packages_feeds",
-        "octopus_workflow_users_teams",
-        "octopus_workflow_monitoring_diagnostics",
-        "octopus_workflow_manual_intervention",
-        "octopus_workflow_config_as_code",
-        "octopus_workflow_server_administration",
+        "octopus",
+        "octopus-release-deployment",
+        "octopus-projects",
+        "octopus-environments-lifecycles",
+        "octopus-tenants",
+        "octopus-variables",
+        "octopus-runbooks",
+        "octopus-infrastructure",
+        "octopus-packages-feeds",
+        "octopus-users-teams",
+        "octopus-monitoring-diagnostics",
+        "octopus-manual-intervention",
+        "octopus-config-as-code",
+        "octopus-server-administration",
     ];
     expected.sort_unstable();
     assert_eq!(names, expected);
     assert!(
-        names
-            .iter()
-            .all(|name| name.starts_with("octopus_workflow")),
-        "every advertised prompt should share the octopus_workflow* prefix, got {names:?}"
+        names.iter().all(|name| name.starts_with("octopus")),
+        "every advertised prompt should share the octopus prefix, got {names:?}"
     );
 
     let release_deployment = prompts
         .iter()
-        .find(|p| p.name == "octopus_workflow_release_deployment")
+        .find(|p| p.name == "octopus-release-deployment")
         .expect("release_deployment prompt should be advertised");
     let arguments = release_deployment
         .arguments
@@ -115,10 +113,10 @@ async fn master_prompt_links_to_the_release_deployment_workflow() {
     let client = TestClient.serve(client_transport).await.unwrap();
 
     let result = client
-        .get_prompt(GetPromptRequestParams::new("octopus_workflow"))
+        .get_prompt(GetPromptRequestParams::new("octopus"))
         .await
         .unwrap();
-    assert!(message_text(&result).contains("octopus_workflow_release_deployment"));
+    assert!(message_text(&result).contains("octopus-release-deployment"));
 
     drop(client);
     tokio::time::timeout(std::time::Duration::from_secs(2), server_task)
@@ -139,7 +137,7 @@ async fn release_deployment_prompt_echoes_supplied_and_lists_missing_context() {
 
     let result = client
         .get_prompt(
-            GetPromptRequestParams::new("octopus_workflow_release_deployment").with_arguments(
+            GetPromptRequestParams::new("octopus-release-deployment").with_arguments(
                 serde_json::json!({ "space_id": "Spaces-1", "project_id": "Projects-1" })
                     .as_object()
                     .unwrap()
@@ -169,5 +167,5 @@ fn server_info_advertises_the_prompts_capability() {
     use rmcp::ServerHandler;
     let info = server().get_info();
     assert!(info.capabilities.prompts.is_some());
-    assert!(info.instructions.unwrap().contains("octopus_workflow"));
+    assert!(info.instructions.unwrap().contains("octopus"));
 }

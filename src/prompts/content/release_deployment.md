@@ -1,6 +1,6 @@
 # Create and deploy a release
 
-This sub-workflow is designed to be run as an isolated sub-task where possible — if you were delegated here from `octopus_workflow`'s routing, or your environment otherwise supports running this as its own sub-task, everything you need is in this prompt's own text plus the parameters already listed above; report back only a short summary when done rather than the full step-by-step trace.
+This sub-workflow is designed to be run as an isolated sub-task where possible — if you were delegated here from `octopus`'s routing, or your environment otherwise supports running this as its own sub-task, everything you need is in this prompt's own text plus the parameters already listed above; report back only a short summary when done rather than the full step-by-step trace.
 
 ## Step 0 — gather required parameters
 
@@ -38,10 +38,10 @@ Gated on the deployment call returning a task reference. Search for how to get a
 
 Report what was deployed, where, and the final task status. Offer natural next steps: progress the release to the next environment in the project's lifecycle, or roll back if the deployment failed. If the user wants the files a deployment step captured (e.g. a generated report or log artifact), search for how to list artifacts rather than assuming they're in the task log.
 
-If the deployment task is blocked waiting on a manual-intervention step instead of failing outright, that's `octopus_workflow_manual_intervention`'s job, not this workflow's — fetch that prompt rather than trying to resolve it here.
+If the deployment task is blocked waiting on a manual-intervention step instead of failing outright, that's `octopus-manual-intervention`'s job, not this workflow's — fetch that prompt rather than trying to resolve it here.
 
 ## Composing with other workflows
 
-Steps 1–2 overlap with `octopus_workflow_projects` (tenanted-deployment-mode setting, channel version rules), `octopus_workflow_tenants` (tenant-project connections), `octopus_workflow_variables`, and `octopus_workflow_infrastructure` (deployment target health); Step 4 overlaps with `octopus_workflow_monitoring_diagnostics` (task/progression detail). Fetch those prompts by name for more detail rather than duplicating their content here.
+Steps 1–2 overlap with `octopus-projects` (tenanted-deployment-mode setting, channel version rules), `octopus-tenants` (tenant-project connections), `octopus-variables`, and `octopus-infrastructure` (deployment target health); Step 4 overlaps with `octopus-monitoring-diagnostics` (task/progression detail). Fetch those prompts by name for more detail rather than duplicating their content here.
 
 Every operation above should be reached by searching for what it does, then reading the schema `get` returns before relying on any field name or parameter shape — never assume a hardcoded operationId or that every operation takes a space id (most do; a few server-level resources don't).

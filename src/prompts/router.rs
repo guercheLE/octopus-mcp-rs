@@ -11,7 +11,7 @@ use crate::prompts::{
 #[prompt_router(vis = "pub(crate)")]
 impl McpifyServer {
     #[prompt(
-        name = "octopus_workflow",
+        name = "octopus",
         description = "Start here. Presents the available Octopus Deploy management workflows, \
                         routes to the right guided sub-workflow based on the user's goal, \
                         and — where the environment supports it — delegates that whole \
@@ -30,7 +30,7 @@ impl McpifyServer {
     }
 
     #[prompt(
-        name = "octopus_workflow_release_deployment",
+        name = "octopus-release-deployment",
         description = "Guided create-and-deploy-a-release flow, including the \
                         tenanted-vs-untenanted fork and deployment task polling."
     )]
@@ -55,7 +55,7 @@ impl McpifyServer {
     }
 
     #[prompt(
-        name = "octopus_workflow_projects",
+        name = "octopus-projects",
         description = "Project lifecycle (create/update/list), project groups, deployment \
                         process (steps/actions) editing, and project triggers."
     )]
@@ -67,7 +67,7 @@ impl McpifyServer {
     }
 
     #[prompt(
-        name = "octopus_workflow_environments_lifecycles",
+        name = "octopus-environments-lifecycles",
         description = "Environments, lifecycles (phases, retention policies), and channels \
                         (version rules) — the structure a release progresses through."
     )]
@@ -79,7 +79,7 @@ impl McpifyServer {
     }
 
     #[prompt(
-        name = "octopus_workflow_tenants",
+        name = "octopus-tenants",
         description = "Tenant lifecycle, tenant-project connections, tenant variables, and tag sets."
     )]
     async fn octopus_workflow_tenants_prompt(&self) -> Vec<PromptMessage> {
@@ -90,7 +90,7 @@ impl McpifyServer {
     }
 
     #[prompt(
-        name = "octopus_workflow_variables",
+        name = "octopus-variables",
         description = "Project variables (scoped to environment/tenant/channel/role) and \
                         library variable sets."
     )]
@@ -102,7 +102,7 @@ impl McpifyServer {
     }
 
     #[prompt(
-        name = "octopus_workflow_runbooks",
+        name = "octopus-runbooks",
         description = "Runbook lifecycle: create runbook, edit its process, publish a \
                         snapshot, and run it against an environment/tenant."
     )]
@@ -114,7 +114,7 @@ impl McpifyServer {
     }
 
     #[prompt(
-        name = "octopus_workflow_infrastructure",
+        name = "octopus-infrastructure",
         description = "Deployment targets/machines, workers, worker pools, machine policies, \
                         and the accounts/certificates that back target credentials."
     )]
@@ -126,7 +126,7 @@ impl McpifyServer {
     }
 
     #[prompt(
-        name = "octopus_workflow_packages_feeds",
+        name = "octopus-packages-feeds",
         description = "Package feeds (repository connections), packages, and build information."
     )]
     async fn octopus_workflow_packages_feeds_prompt(&self) -> Vec<PromptMessage> {
@@ -137,7 +137,7 @@ impl McpifyServer {
     }
 
     #[prompt(
-        name = "octopus_workflow_users_teams",
+        name = "octopus-users-teams",
         description = "Users, teams, scoped user roles, and team membership/permissions."
     )]
     async fn octopus_workflow_users_teams_prompt(&self) -> Vec<PromptMessage> {
@@ -148,7 +148,7 @@ impl McpifyServer {
     }
 
     #[prompt(
-        name = "octopus_workflow_manual_intervention",
+        name = "octopus-manual-intervention",
         description = "Find a pending interruption blocking a deployment or runbook run, \
                         take responsibility for it, and submit the response that unblocks it."
     )]
@@ -170,7 +170,7 @@ impl McpifyServer {
     }
 
     #[prompt(
-        name = "octopus_workflow_config_as_code",
+        name = "octopus-config-as-code",
         description = "Connect a project to a git repository (Config As Code): set up a git \
                         credential, connect the project, and know when to address deployment \
                         settings/process \"in git\" vs. \"in database\"."
@@ -190,7 +190,7 @@ impl McpifyServer {
     }
 
     #[prompt(
-        name = "octopus_workflow_server_administration",
+        name = "octopus-server-administration",
         description = "Server-wide admin operations: SMTP, authentication providers, Octopus \
                         Server nodes (HA), proxies, scheduler, dynamic-extensions feature \
                         flags, webhook subscriptions, and general server configuration."
@@ -203,7 +203,7 @@ impl McpifyServer {
     }
 
     #[prompt(
-        name = "octopus_workflow_monitoring_diagnostics",
+        name = "octopus-monitoring-diagnostics",
         description = "Thin pointer to the right read-only signal: dashboard, tasks, events, \
                         deployment/runbook progression, interruptions, and server status."
     )]
