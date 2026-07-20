@@ -70,6 +70,30 @@ octopus-mcp call createReleaseBySpace --args '{"spaceId":"Spaces-1","body":{"Pro
 
 Other subcommands: `octopus-mcp test-connection` (verify the configured API URL/credentials are reachable), `octopus-mcp config` (print the resolved configuration, secrets redacted), `octopus-mcp version` (print the installed version), and `octopus-mcp versions` (list the API spec versions this project has a store for).
 
+### Workflows (MCP prompts)
+
+Beyond `search`/`get`/`call`, the server exposes MCP **prompts** — pre-written, step-by-step instructions an MCP client can fetch to guide an LLM through a multi-step Octopus Deploy task instead of it re-deriving the right sequence of operations from scratch every session. Call `prompts/list` to see them, and `prompts/get` on any name to fetch its instructions (some accept optional arguments, like a project or space id, to pre-fill what's already known).
+
+Start with **`octopus_workflow`**, the master prompt: it presents a menu and routes to the right sub-workflow based on your goal. The 13 sub-workflows:
+
+| Prompt | Covers |
+|---|---|
+| `octopus_workflow_release_deployment` | Create a release and deploy it to an environment or tenant, including task polling |
+| `octopus_workflow_runbooks` | Create/edit a runbook, publish a snapshot, and run it |
+| `octopus_workflow_projects` | Project lifecycle, project groups, deployment process/settings, triggers |
+| `octopus_workflow_environments_lifecycles` | Environments, lifecycles (phases/retention), channels (version rules) |
+| `octopus_workflow_tenants` | Tenant lifecycle, tenant-project connections, tenant variables, tag sets |
+| `octopus_workflow_variables` | Project variables and library variable sets |
+| `octopus_workflow_infrastructure` | Deployment targets/machines, workers, worker pools, accounts, certificates |
+| `octopus_workflow_packages_feeds` | Package feeds, packages, build information |
+| `octopus_workflow_users_teams` | Users, teams, scoped user roles, permissions |
+| `octopus_workflow_monitoring_diagnostics` | Read-only dashboard, tasks, events, progression, server status |
+| `octopus_workflow_manual_intervention` | Claim and resolve a pending interruption blocking a deployment/runbook run |
+| `octopus_workflow_config_as_code` | Connect a project to a git repository for its deployment process/settings |
+| `octopus_workflow_server_administration` | SMTP, authentication providers, HA server nodes, proxies, scheduler, subscriptions |
+
+Clients that support running an isolated sub-task (e.g. an agent/task tool) can delegate an entire sub-workflow to it, keeping that sub-workflow's own `search`/`get`/`call` traffic out of the main conversation — each prompt's own instructions call this out where it applies. See [docs/mcp-prompts-workflow-plan.md](docs/mcp-prompts-workflow-plan.md) for the full design rationale.
+
 ### Harness Server
 
 ```bash

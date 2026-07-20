@@ -24,6 +24,22 @@ pub struct ReleaseDeploymentWorkflowArgs {
     pub channel_id: Option<String>,
 }
 
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ManualInterventionWorkflowArgs {
+    /// The Octopus Space id (e.g. "Spaces-1") the interruption is in
+    pub space_id: Option<String>,
+    /// The interruption id to resolve, if already known
+    pub interruption_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ConfigAsCodeWorkflowArgs {
+    /// The Octopus Space id (e.g. "Spaces-1") the project lives in
+    pub space_id: Option<String>,
+    /// The project id or name to connect to version control
+    pub project_id: Option<String>,
+}
+
 /// Renders a short "Context already provided" / "Still unknown" header from
 /// the prompt's own arguments, prepended to each prompt's static markdown
 /// body — this is the only per-invocation content a prompt renders, so the

@@ -62,6 +62,9 @@ async fn prompts_list_advertises_the_full_workflow_surface() {
         "octopus_workflow_packages_feeds",
         "octopus_workflow_users_teams",
         "octopus_workflow_monitoring_diagnostics",
+        "octopus_workflow_manual_intervention",
+        "octopus_workflow_config_as_code",
+        "octopus_workflow_server_administration",
     ];
     expected.sort_unstable();
     assert_eq!(names, expected);

@@ -36,7 +36,9 @@ Gated on the deployment call returning a task reference. Search for how to get a
 
 ## Step 5 — summarize and offer follow-ups
 
-Report what was deployed, where, and the final task status. Offer natural next steps: progress the release to the next environment in the project's lifecycle, or roll back if the deployment failed.
+Report what was deployed, where, and the final task status. Offer natural next steps: progress the release to the next environment in the project's lifecycle, or roll back if the deployment failed. If the user wants the files a deployment step captured (e.g. a generated report or log artifact), search for how to list artifacts rather than assuming they're in the task log.
+
+If the deployment task is blocked waiting on a manual-intervention step instead of failing outright, that's `octopus_workflow_manual_intervention`'s job, not this workflow's — fetch that prompt rather than trying to resolve it here.
 
 ## Composing with other workflows
 

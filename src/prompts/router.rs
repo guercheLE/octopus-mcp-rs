@@ -3,7 +3,10 @@ use rmcp::model::{PromptMessage, Role};
 use rmcp::{prompt, prompt_router};
 
 use crate::core::mcp_server::McpifyServer;
-use crate::prompts::{MasterWorkflowArgs, ReleaseDeploymentWorkflowArgs, render_context_header};
+use crate::prompts::{
+    ConfigAsCodeWorkflowArgs, ManualInterventionWorkflowArgs, MasterWorkflowArgs,
+    ReleaseDeploymentWorkflowArgs, render_context_header,
+};
 
 #[prompt_router(vis = "pub(crate)")]
 impl McpifyServer {
@@ -141,6 +144,61 @@ impl McpifyServer {
         vec![PromptMessage::new_text(
             Role::User,
             include_str!("content/users_teams.md"),
+        )]
+    }
+
+    #[prompt(
+        name = "octopus_workflow_manual_intervention",
+        description = "Find a pending interruption blocking a deployment or runbook run, \
+                        take responsibility for it, and submit the response that unblocks it."
+    )]
+    async fn octopus_workflow_manual_intervention_prompt(
+        &self,
+        Parameters(args): Parameters<ManualInterventionWorkflowArgs>,
+    ) -> Vec<PromptMessage> {
+        let header = render_context_header(&[
+            ("space_id", args.space_id.as_deref()),
+            ("interruption_id", args.interruption_id.as_deref()),
+        ]);
+        vec![PromptMessage::new_text(
+            Role::User,
+            format!(
+                "{header}\n\n{}",
+                include_str!("content/manual_intervention.md")
+            ),
+        )]
+    }
+
+    #[prompt(
+        name = "octopus_workflow_config_as_code",
+        description = "Connect a project to a git repository (Config As Code): set up a git \
+                        credential, connect the project, and know when to address deployment \
+                        settings/process \"in git\" vs. \"in database\"."
+    )]
+    async fn octopus_workflow_config_as_code_prompt(
+        &self,
+        Parameters(args): Parameters<ConfigAsCodeWorkflowArgs>,
+    ) -> Vec<PromptMessage> {
+        let header = render_context_header(&[
+            ("space_id", args.space_id.as_deref()),
+            ("project_id", args.project_id.as_deref()),
+        ]);
+        vec![PromptMessage::new_text(
+            Role::User,
+            format!("{header}\n\n{}", include_str!("content/config_as_code.md")),
+        )]
+    }
+
+    #[prompt(
+        name = "octopus_workflow_server_administration",
+        description = "Server-wide admin operations: SMTP, authentication providers, Octopus \
+                        Server nodes (HA), proxies, scheduler, dynamic-extensions feature \
+                        flags, webhook subscriptions, and general server configuration."
+    )]
+    async fn octopus_workflow_server_administration_prompt(&self) -> Vec<PromptMessage> {
+        vec![PromptMessage::new_text(
+            Role::User,
+            include_str!("content/server_administration.md"),
         )]
     }
 

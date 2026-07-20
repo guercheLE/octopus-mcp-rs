@@ -11,7 +11,10 @@ Route the user's goal to one of the guided sub-workflows below, then fetch that 
 - `octopus_workflow_infrastructure` — deployment targets/machines, workers, worker pools, machine policies, accounts, certificates. Use for "register a new target" or target-health questions.
 - `octopus_workflow_packages_feeds` — package feeds, packages, build information. Use for "where does this package come from" or feed-connection questions.
 - `octopus_workflow_users_teams` — users, teams, scoped user roles, permissions. Use for access/permission questions.
-- `octopus_workflow_monitoring_diagnostics` — dashboard, tasks, events, progression, interruptions, server status. Use for read-only "what's the current state of X" questions.
+- `octopus_workflow_monitoring_diagnostics` — dashboard, tasks, events, progression, server status. Use for read-only "what's the current state of X" questions.
+- `octopus_workflow_manual_intervention` — find a pending interruption blocking a deployment/runbook run, claim it, and submit the response that unblocks it. Use for "my deployment is stuck waiting for approval" requests.
+- `octopus_workflow_config_as_code` — connect a project to a git repository so its deployment process/settings live in git instead of the database. Use for "set up Config As Code" or "why does this project need a git branch" requests.
+- `octopus_workflow_server_administration` — SMTP, authentication providers, HA server nodes, proxies, scheduler, feature flags, webhook subscriptions, general server configuration. Use for server-wide admin questions not scoped to any space.
 
 If the user's goal spans more than one of these (e.g. "set up a new tenanted project and deploy it"), route to each relevant sub-workflow in the order its dependencies require, and prefer delegating each as its own sub-task rather than interleaving their steps in this conversation.
 
