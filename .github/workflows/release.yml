@@ -25,18 +25,6 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
-      - name: Exclude build paths from Windows Defender
-        # Windows Defender's real-time scanning inspects every file
-        # written/read during compilation and test runs, which is why
-        # `Verify`/`Build archives` below run 2-3x slower on Windows than
-        # on Linux/macOS for otherwise-identical work. Excluding the cargo
-        # registry and this checkout is the standard fix for GitHub-hosted
-        # Windows runners (which run with the rights this needs already).
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Add-MpPreference -ExclusionPath "$env:USERPROFILE\.cargo"
-          Add-MpPreference -ExclusionPath "${{ github.workspace }}"
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
